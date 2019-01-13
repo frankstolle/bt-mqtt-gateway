@@ -55,13 +55,19 @@ class CometBlue():
             ret["window_open_minutes"] = data[6]
             return ret
 
-    def set_target_temperature(self, temperature):
+    def set_target_temperature(self, temperature=None, temperature_high=None):
         with self.lock:
             connection = self.get_connection()
             _LOGGER.debug("write temperatures to "+self.mac)
-            temperature = max(8, min(28, temperature))
-            temp = round(temperature * 2)
-            data = bytes([0x80, temp, 0x80, 0x80, 0x80, 0x80, 0x80])
+            target_temp = 0x80
+            target_high = 0x80
+            if temperature is not None:
+                temperature = max(7.5, min(28.5, temperature))
+                target_temp = round(temperature * 2)
+            if temperature_high is not None:
+                temperature_high = max(8, min(28, temperature_high))
+                target_high = round(temperature_high * 2)
+            data = bytes([0x80, target_temp, 0x80, target_high, 0x80, 0x80, 0x80])
             connection.writeCharacteristic(0x003f, data, withResponse=True)
 
     def read_battery(self):
@@ -72,9 +78,11 @@ class CometBlue():
             return data[0]
 
 class CometBlueController:
-    def __init__(self, mac, pin, updateinterval):
+    def __init__(self, mac, pin, updateinterval, storetarget):
         self.lock = threading.RLock()
         self.updateinterval = updateinterval
+        #storetarget = saves targetvalue in high target to handle off and heat mode correctly
+        self.storetarget = storetarget
         self.device = CometBlue(mac, pin)
         self.lastupdated = 0
         self.state = dict()
@@ -103,11 +111,17 @@ class CometBlueController:
         with self.lock:
             self.lastupdated = time.time()
             self.state['state'] = 'online'
-            #FIXME: Frank: hier je nach temperatur entscheiden ob ein oder aus
-            self.state['mode'] = 'ON'
             self.state['current_temperature'] = temperature['current_temperature']
             self.state['offset_temperature'] = temperature['offset_temperature']
-            self.state['target_temperature'] = temperature['target_temperature']
+            if temperature['target_temperature'] < 8:
+                self.state['mode'] = 'OFF'
+                self.state['target_temperature'] = temperature['target_high'] if self.storetarget else temperature['target_temperature']
+            elif temperature['target_temperature'] > 28:
+                self.state['mode'] = 'HEAT'
+                self.state['target_temperature'] = temperature['target_high'] if self.storetarget else temperature['target_temperature']
+            else:
+                self.state['mode'] = 'ON'
+                self.state['target_temperature'] = temperature['target_temperature']
             self.state['battery'] = battery
             self.state['timestamp'] = datetime.datetime.fromtimestamp(self.lastupdated).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -120,12 +134,42 @@ class CometBlueController:
 
 
     def set_target_temperature(self, temperature):
+        temperature = max(8, min(28, temperature))
+        target_temperatur = None
+        target_high = None
+        with self.lock:
+            if self.state['mode'] == "ON":
+                target_temperatur = temperature
+            if self.storetarget:
+                target_high = temperature
         try:
-            self.device.set_target_temperature(temperature)
+            if target_temperatur is not None or target_high is not None:
+                self.device.set_target_temperature(temperature=target_temperatur, temperature_high=target_high)
             self._read_state()
         except Exception as e:
             self._handle_connecterror(e)
 
+    def set_mode(self, mode):
+        target_temperatur = None
+        with self.lock:
+            if mode.lower() == self.state['mode'].lower():
+                return
+            if mode.lower() == "off":
+                target_temperatur = 7.5
+            elif mode.lower() == "heat":
+                target_temperatur = 28.5
+            else:
+                if self.storetarget:
+                    target_temperatur = self.state['target_temperature']
+                else:
+                    target_temperatur = 21
+        try:
+            if target_temperatur is not None:
+                self.device.set_target_temperature(temperature=target_temperatur)
+            self._read_state()
+        except Exception as e:
+            self._handle_connecterror(e)
+        
     def get_state(self):
         with self.lock:
             return self.state.copy()
@@ -142,7 +186,11 @@ class CometblueWorker(BaseWorker):
                 updateinterval = data['update_interval']
             else:
                 updateinterval = 300
-            self.dev[name] = CometBlueController(data['mac'], data['pin'], updateinterval)
+            if 'storetarget' in data:
+                storetarget = data['storetarget']
+            else:
+                storetarget = false
+            self.dev[name] = CometBlueController(data['mac'], data['pin'], updateinterval, storetarget)
             self.dev[name].start()
 
     def status_update(self):
@@ -167,9 +215,10 @@ class CometblueWorker(BaseWorker):
         if not device_name in self.dev:
             _LOGGER.warn("ignore unknown device "+device_name)
             return []
-        if method=="target_temperature":
+        if method == "target_temperature":
             self.dev[device_name].set_target_temperature(float(valueAsString))
-            pass
+        elif method == "mode":
+            self.dev[device_name].set_mode(valueAsString)
         else:
             _LOGGER.warn("unknown method "+method)
             return []
