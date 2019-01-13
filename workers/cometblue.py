@@ -77,6 +77,14 @@ class CometBlue():
             data = connection.readCharacteristic(0x0041)
             return data[0]
 
+    def set_pin(self, pin):
+        with self.lock:
+            connection = self.get_connection()
+            _LOGGER.debug("set pin "+str(pin))
+            self.connection.writeCharacteristic(0x0047, pin.to_bytes(4, byteorder='little'), withResponse=True)
+            self.pin = pin
+            
+
 class CometBlueController:
     def __init__(self, mac, pin, updateinterval, storetarget):
         self.lock = threading.RLock()
@@ -127,6 +135,7 @@ class CometBlueController:
 
     def _handle_connecterror(self, e):
         with self.lock:
+            self.lastupdated = time.time()
             self.state['state'] = 'offline'
             self.state['timestamp'] = datetime.datetime.fromtimestamp(time.time()).strftime("%Y-%m-%d %H:%M:%S")
         print(e)
@@ -174,6 +183,9 @@ class CometBlueController:
         with self.lock:
             return self.state.copy()
 
+    def set_pin(self, pin):
+        self.device.set_pin(int(pin))
+
 class CometblueWorker(BaseWorker):
     def _setup(self):
         self.dev = dict()
@@ -219,6 +231,9 @@ class CometblueWorker(BaseWorker):
             self.dev[device_name].set_target_temperature(float(valueAsString))
         elif method == "mode":
             self.dev[device_name].set_mode(valueAsString)
+        elif method == "pin" and valueAsString.startswith("PIN:"):
+            self.dev[device_name].set_pin(valueAsString[4:])
+            return [MqttMessage(topic=self.format_topic(device_name, 'updatedpin'), payload=valueAsString[4:], retain=False)]
         else:
             _LOGGER.warn("unknown method "+method)
             return []
