@@ -5,6 +5,7 @@ from bluepy.btle import Peripheral
 import logging
 import threading
 import time
+import datetime
 
 REQUIREMENTS = ['bluepy']
 
@@ -75,6 +76,7 @@ class CometBlueController:
         self.lock = threading.RLock()
         self.updateinterval = updateinterval
         self.device = CometBlue(mac, pin)
+        self.lastupdated = 0
         self.state = dict()
         self.state['state'] = 'offline'
 
@@ -83,16 +85,23 @@ class CometBlueController:
         
     def _update(self):
         while True:
+            timetosleep = self._get_time_to_sleep_till_update()
+            while timetosleep > 0:
+                time.sleep(timetosleep)
+                timetosleep = self._get_time_to_sleep_till_update()
             try:
                 self._read_state()
             except Exception as e:
                 self._handle_connecterror(e)
-            time.sleep(self.updateinterval)
+
+    def _get_time_to_sleep_till_update(self):
+        return self.lastupdated + self.updateinterval - time.time()
 
     def _read_state(self):
         temperature = self.device.read_temperature()
         battery = self.device.read_battery()
         with self.lock:
+            self.lastupdated = time.time()
             self.state['state'] = 'online'
             #FIXME: Frank: hier je nach temperatur entscheiden ob ein oder aus
             self.state['mode'] = 'ON'
@@ -100,11 +109,12 @@ class CometBlueController:
             self.state['offset_temperature'] = temperature['offset_temperature']
             self.state['target_temperature'] = temperature['target_temperature']
             self.state['battery'] = battery
-            #FIXME: Frank: zeit der aktualisierung mit speichern als unix timestamp oder auch formartiert für den mqtt?
+            self.state['timestamp'] = datetime.datetime.fromtimestamp(self.lastupdated).strftime("%Y-%m-%d %H:%M:%S")
 
     def _handle_connecterror(self, e):
         with self.lock:
             self.state['state'] = 'offline'
+            self.state['timestamp'] = datetime.datetime.fromtimestamp(time.time()).strftime("%Y-%m-%d %H:%M:%S")
         print(e)
         self.device.disconnect()
 
