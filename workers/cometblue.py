@@ -80,10 +80,45 @@ class CometBlue():
     def set_pin(self, pin):
         with self.lock:
             connection = self.get_connection()
-            _LOGGER.debug("set pin "+str(pin))
+            _LOGGER.debug("set pin "+str(pin)+" to "+self.mac)
             self.connection.writeCharacteristic(0x0047, pin.to_bytes(4, byteorder='little'), withResponse=True)
             self.pin = pin
             
+    def clear_automatic(self):
+        """ clears every automatic switch rule in thermostate """
+        with self.lock:
+            connection = self.get_connection()
+            _LOGGER.debug("clear rules "+self.mac)
+            #Monday
+            self.connection.writeCharacteristic(0x001f, bytes([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), withResponse=True)
+            #Thuesday
+            self.connection.writeCharacteristic(0x0021, bytes([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), withResponse=True)
+            #Wednesday
+            self.connection.writeCharacteristic(0x0023, bytes([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), withResponse=True)
+            #Thursday
+            self.connection.writeCharacteristic(0x0025, bytes([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), withResponse=True)
+            #Friday
+            self.connection.writeCharacteristic(0x0027, bytes([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), withResponse=True)
+            #Saturday
+            self.connection.writeCharacteristic(0x0029, bytes([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), withResponse=True)
+            #Sunday
+            self.connection.writeCharacteristic(0x002b, bytes([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), withResponse=True)
+            #holiday 1
+            self.connection.writeCharacteristic(0x002d, bytes([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80]), withResponse=True)
+            #holiday 2
+            self.connection.writeCharacteristic(0x002f, bytes([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80]), withResponse=True)
+            #holiday 3
+            self.connection.writeCharacteristic(0x0031, bytes([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80]), withResponse=True)
+            #holiday 4
+            self.connection.writeCharacteristic(0x0033, bytes([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80]), withResponse=True)
+            #holiday 5
+            self.connection.writeCharacteristic(0x0035, bytes([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80]), withResponse=True)
+            #holiday 6
+            self.connection.writeCharacteristic(0x0037, bytes([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80]), withResponse=True)
+            #holiday 7
+            self.connection.writeCharacteristic(0x0039, bytes([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80]), withResponse=True)
+            #holiday 8
+            self.connection.writeCharacteristic(0x003b, bytes([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80]), withResponse=True)
 
 class CometBlueController:
     def __init__(self, mac, pin, updateinterval, storetarget):
@@ -186,6 +221,9 @@ class CometBlueController:
     def set_pin(self, pin):
         self.device.set_pin(int(pin))
 
+    def clear_automatic(self):
+        self.device.clear_automatic()
+
 class CometblueWorker(BaseWorker):
     def _setup(self):
         self.dev = dict()
@@ -234,6 +272,8 @@ class CometblueWorker(BaseWorker):
         elif method == "pin" and valueAsString.startswith("PIN:"):
             self.dev[device_name].set_pin(valueAsString[4:])
             return [MqttMessage(topic=self.format_topic(device_name, 'updatedpin'), payload=valueAsString[4:], retain=False)]
+        elif method == "reset" and valueAsString == "reset":
+            self.dev[device_name].clear_automatic()
         else:
             _LOGGER.warn("unknown method "+method)
             return []
