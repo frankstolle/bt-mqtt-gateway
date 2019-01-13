@@ -144,9 +144,16 @@ class CometBlueController:
                 self._read_state()
             except Exception as e:
                 self._handle_connecterror(e)
+                self._correct_last_update_after_error()
+
+    def _correct_last_update_after_error(self):
+        """ correct last update to check again in 10 seconds """
+        with self.lock:
+            self.lastupdated = time.time() + 10 - self.updateinterval
 
     def _get_time_to_sleep_till_update(self):
-        return self.lastupdated + self.updateinterval - time.time()
+        with self.lock:
+            return self.lastupdated + self.updateinterval - time.time()
 
     def _read_state(self):
         temperature = self.device.read_temperature()
