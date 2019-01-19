@@ -197,13 +197,17 @@ class CometBlueController:
                 target_temperatur = temperature
             if self.storetarget:
                 target_high = temperature
-        try:
-            if target_temperatur is not None or target_high is not None:
-                # set high and low target temperature to same value to prevent automatic switch by the thermostate
-                self.device.set_target_temperature(temperature=target_temperatur, temperature_high=target_high, temperature_low=target_high)
-            self._read_state()
-        except Exception as e:
-            self._handle_connecterror(e)
+        c=0
+        while c < 10:
+            try:
+                if target_temperatur is not None or target_high is not None:
+                    # set high and low target temperature to same value to prevent automatic switch by the thermostate
+                    self.device.set_target_temperature(temperature=target_temperatur, temperature_high=target_high, temperature_low=target_high)
+                self._read_state()
+                return
+            except Exception as e:
+                self._handle_connecterror(e)
+            c += 1
 
     def set_mode(self, mode):
         target_temperatur = None
@@ -255,7 +259,6 @@ class CometblueCommand:
             self.device.set_mode(self.value)
         elif self.method == "pin" and self.value.startswith("PIN:"):
             self.device.set_pin(self.value[4:])
-            self.result = [MqttMessage(topic=self.format_topic(self.device_name, 'updatedpin'), payload=self.value[4:], retain=False)]
         elif self.method == "reset" and self.value == "reset":
             self.device.clear_automatic()
         else:
@@ -303,7 +306,7 @@ class CometblueWorker(BaseWorker):
         ret = []
         state = self.dev[name].get_state()
         for key, value in state.items():
-            ret.append(MqttMessage(topic=self.format_topic(name, key), payload=value, retain=False))
+            ret.append(MqttMessage(topic=self.format_topic(name, key), payload=value, retain=True))
         return ret
 
     def on_command(self, topic, value):
