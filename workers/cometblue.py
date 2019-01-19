@@ -140,14 +140,17 @@ class CometBlueController:
         
     def _update(self):
         while True:
+            failureCount = 0
             timetosleep = self._get_time_to_sleep_till_update()
             while timetosleep > 0:
                 time.sleep(timetosleep)
                 timetosleep = self._get_time_to_sleep_till_update()
             try:
                 self._read_state()
+                failureCount = 0
             except Exception as e:
-                self._handle_connecterror(e)
+                failureCount += 1
+                self._handle_connecterror(e, failureCount >= 2)
                 self._correct_last_update_after_error()
 
     def _correct_last_update_after_error(self):
@@ -179,11 +182,12 @@ class CometBlueController:
             self.state['battery'] = battery
             self.state['timestamp'] = datetime.datetime.fromtimestamp(self.lastupdated).strftime("%Y-%m-%d %H:%M:%S")
 
-    def _handle_connecterror(self, e):
-        with self.lock:
-            self.lastupdated = time.time()
-            self.state['state'] = 'offline'
-            self.state['timestamp'] = datetime.datetime.fromtimestamp(time.time()).strftime("%Y-%m-%d %H:%M:%S")
+    def _handle_connecterror(self, e, markAsOffline):
+        if markAsOffline:
+            with self.lock:
+                self.lastupdated = time.time()
+                self.state['state'] = 'offline'
+                self.state['timestamp'] = datetime.datetime.fromtimestamp(time.time()).strftime("%Y-%m-%d %H:%M:%S")
         print(e)
         self.device.disconnect()
 
@@ -206,7 +210,7 @@ class CometBlueController:
                 self._read_state()
                 return
             except Exception as e:
-                self._handle_connecterror(e)
+                self._handle_connecterror(e, false)
             c += 1
 
     def set_mode(self, mode):
@@ -228,7 +232,7 @@ class CometBlueController:
                 self.device.set_target_temperature(temperature=target_temperatur)
             self._read_state()
         except Exception as e:
-            self._handle_connecterror(e)
+            self._handle_connecterror(e, false)
         
     def get_state(self):
         with self.lock:
