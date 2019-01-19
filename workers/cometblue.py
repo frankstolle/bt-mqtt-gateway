@@ -55,19 +55,23 @@ class CometBlue():
             ret["window_open_minutes"] = data[6]
             return ret
 
-    def set_target_temperature(self, temperature=None, temperature_high=None):
+    def set_target_temperature(self, temperature=None, temperature_high=None, temperature_low=None):
         with self.lock:
             connection = self.get_connection()
             _LOGGER.debug("write temperatures to "+self.mac)
             target_temp = 0x80
             target_high = 0x80
+            target_low = 0x80
             if temperature is not None:
                 temperature = max(7.5, min(28.5, temperature))
                 target_temp = round(temperature * 2)
             if temperature_high is not None:
                 temperature_high = max(8, min(28, temperature_high))
                 target_high = round(temperature_high * 2)
-            data = bytes([0x80, target_temp, 0x80, target_high, 0x80, 0x80, 0x80])
+            if temperature_low is not None:
+                temperature_low = max(8, min(28, temperature_low))
+                target_low = round(temperature_low * 2)
+            data = bytes([0x80, target_temp, target_low, target_high, 0x80, 0x80, 0x80])
             connection.writeCharacteristic(0x003f, data, withResponse=True)
 
     def read_battery(self):
@@ -170,7 +174,7 @@ class CometBlueController:
                 self.state['mode'] = 'HEAT'
                 self.state['target_temperature'] = temperature['target_high'] if self.storetarget else temperature['target_temperature']
             else:
-                self.state['mode'] = 'ON'
+                self.state['mode'] = 'AUTO' if temperature['target_high'] == temperature['target_temperature'] else 'MANUAL'
                 self.state['target_temperature'] = temperature['target_temperature']
             self.state['battery'] = battery
             self.state['timestamp'] = datetime.datetime.fromtimestamp(self.lastupdated).strftime("%Y-%m-%d %H:%M:%S")
@@ -195,7 +199,8 @@ class CometBlueController:
                 target_high = temperature
         try:
             if target_temperatur is not None or target_high is not None:
-                self.device.set_target_temperature(temperature=target_temperatur, temperature_high=target_high)
+                # set high and low target temperature to same value to prevent automatic switch by the thermostate
+                self.device.set_target_temperature(temperature=target_temperatur, temperature_high=target_high, temperature_low=target_high)
             self._read_state()
         except Exception as e:
             self._handle_connecterror(e)
@@ -261,7 +266,7 @@ class CometblueWorker(BaseWorker):
         ret = []
         state = self.dev[name].get_state()
         for key, value in state.items():
-            ret.append(MqttMessage(topic=self.format_topic(name, key), payload=value, retain=True))
+            ret.append(MqttMessage(topic=self.format_topic(name, key), payload=value, retain=False))
         return ret
 
     def on_command(self, topic, value):
