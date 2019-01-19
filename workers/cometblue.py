@@ -193,7 +193,7 @@ class CometBlueController:
         target_temperatur = None
         target_high = None
         with self.lock:
-            if self.state['mode'] == "ON":
+            if self.state['mode'] == "AUTO" or self.state['mode'] == "MANUAL":
                 target_temperatur = temperature
             if self.storetarget:
                 target_high = temperature
@@ -236,6 +236,43 @@ class CometBlueController:
     def clear_automatic(self):
         self.device.clear_automatic()
 
+class CometblueCommand:
+
+    def __init__(self, method, value, device, device_name):
+        self.method = method
+        self.value = value
+        self.device = device
+        self.device_name = device_name
+        self.thread = threading.Thread(target=self._perform, daemon=True)
+        self.thread.start()
+
+    def _perform(self):
+        _LOGGER.debug("start command %s:%s", self.method, self.value)
+        self.result = None
+        if self.method == "target_temperature":
+            self.device.set_target_temperature(float(self.value))
+        elif self.method == "mode":
+            self.device.set_mode(self.value)
+        elif self.method == "pin" and self.value.startswith("PIN:"):
+            self.device.set_pin(self.value[4:])
+            self.result = [MqttMessage(topic=self.format_topic(self.device_name, 'updatedpin'), payload=self.value[4:], retain=False)]
+        elif self.method == "reset" and self.value == "reset":
+            self.device.clear_automatic()
+        else:
+            _LOGGER.warn("unknown method "+method)
+            self.result = []
+        _LOGGER.debug("finished command %s:%s", self.method, self.value)
+        
+
+    def get_result(self):
+        if not self.thread.is_alive():
+            return self.result
+        self.thread.join(timeout=5)
+        if self.thread.is_alive():
+            return None
+        return self.result
+
+    
 class CometblueWorker(BaseWorker):
     def _setup(self):
         self.dev = dict()
@@ -277,16 +314,10 @@ class CometblueWorker(BaseWorker):
         if not device_name in self.dev:
             _LOGGER.warn("ignore unknown device "+device_name)
             return []
-        if method == "target_temperature":
-            self.dev[device_name].set_target_temperature(float(valueAsString))
-        elif method == "mode":
-            self.dev[device_name].set_mode(valueAsString)
-        elif method == "pin" and valueAsString.startswith("PIN:"):
-            self.dev[device_name].set_pin(valueAsString[4:])
-            return [MqttMessage(topic=self.format_topic(device_name, 'updatedpin'), payload=valueAsString[4:], retain=False)]
-        elif method == "reset" and valueAsString == "reset":
-            self.dev[device_name].clear_automatic()
-        else:
-            _LOGGER.warn("unknown method "+method)
-            return []
+        _LOGGER.debug("received command %s:%s@%s", method, valueAsString, device_name)
+        command = CometblueCommand(method, valueAsString, self.dev[device_name], device_name)
+        result = command.get_result()
+        _LOGGER.debug("send on_command result %s:%s=%s", topic, valueAsString, result)
+        if result != None:
+            return result
         return self._get_mqtt_state_messages(device_name)
