@@ -6,6 +6,7 @@ import logging
 import threading
 import time
 import datetime
+import sys
 
 REQUIREMENTS = ['bluepy']
 
@@ -148,9 +149,9 @@ class CometBlueController:
             try:
                 self._read_state()
                 failureCount = 0
-            except Exception as e:
+            except:
                 failureCount += 1
-                self._handle_connecterror(e, failureCount >= 2)
+                self._handle_connecterror(sys.exc_info()[0], failureCount >= 6)
                 self._correct_last_update_after_error()
 
     def _correct_last_update_after_error(self):
@@ -163,8 +164,11 @@ class CometBlueController:
             return self.lastupdated + self.updateinterval - time.time()
 
     def _read_state(self):
-        temperature = self.device.read_temperature()
-        battery = self.device.read_battery()
+        try:
+            temperature = self.device.read_temperature()
+            battery = self.device.read_battery()
+        finally:
+            self.device.disconnect()
         with self.lock:
             self.lastupdated = time.time()
             self.state['state'] = 'online'
@@ -209,8 +213,8 @@ class CometBlueController:
                     self.device.set_target_temperature(temperature=target_temperatur, temperature_high=target_high, temperature_low=target_high)
                 self._read_state()
                 return
-            except Exception as e:
-                self._handle_connecterror(e, false)
+            except:
+                self._handle_connecterror(sys.exc_info()[0], false)
             c += 1
 
     def set_mode(self, mode):
@@ -231,8 +235,8 @@ class CometBlueController:
             if target_temperatur is not None:
                 self.device.set_target_temperature(temperature=target_temperatur)
             self._read_state()
-        except Exception as e:
-            self._handle_connecterror(e, false)
+        except:
+            self._handle_connecterror(sys.exc_info()[0], false)
         
     def get_state(self):
         with self.lock:
@@ -240,9 +244,11 @@ class CometBlueController:
 
     def set_pin(self, pin):
         self.device.set_pin(int(pin))
+        self.device.disconnect()
 
     def clear_automatic(self):
         self.device.clear_automatic()
+        self.device.disconnect()
 
 class CometblueCommand:
 
@@ -266,7 +272,7 @@ class CometblueCommand:
         elif self.method == "reset" and self.value == "reset":
             self.device.clear_automatic()
         else:
-            _LOGGER.warn("unknown method "+method)
+            _LOGGER.warn("unknown method %s", self.method)
             self.result = []
         _LOGGER.debug("finished command %s:%s", self.method, self.value)
         
@@ -274,7 +280,7 @@ class CometblueCommand:
     def get_result(self):
         if not self.thread.is_alive():
             return self.result
-        self.thread.join(timeout=5)
+        self.thread.join(timeout=10)
         if self.thread.is_alive():
             return None
         return self.result
