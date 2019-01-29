@@ -56,6 +56,17 @@ class CometBlue():
             ret["window_open_minutes"] = data[6]
             return ret
 
+    def set_offset_temperature(self, temperature):
+        with self.lock:
+            connection = self.get_connection()
+            _LOGGER.debug("write offset temperatures to "+self.mac)
+            temperature = max(-5, min(5, temperature))
+            offset_temp = round(temperature * 2)
+            if offset_temp < 0:
+                offset_temp += 256
+            data = bytes([0x80, 0x80, 0x80, 0x80, offset_temp, 0x80, 0x80])
+            connection.writeCharacteristic(0x003f, data, withResponse=True)
+
     def set_target_temperature(self, temperature=None, temperature_high=None, temperature_low=None):
         with self.lock:
             connection = self.get_connection()
@@ -217,6 +228,19 @@ class CometBlueController:
                 self._handle_connecterror(sys.exc_info()[0], false)
             c += 1
 
+    def set_offset_temperature(self, temperature):
+        temperature = max(-5, min(5, temperature))
+        c=0
+        while c < 10:
+            try:
+                self.device.set_offset_temperature(temperature)
+                self._read_state()
+                return
+            except:
+                self._handle_connecterror(sys.exc_info()[0], false)
+            c += 1
+
+
     def set_mode(self, mode):
         target_temperatur = None
         with self.lock:
@@ -271,6 +295,8 @@ class CometblueCommand:
             self.device.set_pin(self.value[4:])
         elif self.method == "reset" and self.value == "reset":
             self.device.clear_automatic()
+        elif self.method == "offset_temperature":
+            self.device.set_offset_temperature(float(self.value))
         else:
             _LOGGER.warn("unknown method %s", self.method)
             self.result = []
