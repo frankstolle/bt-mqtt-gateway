@@ -225,7 +225,7 @@ class CometBlueController:
                 self._read_state()
                 return
             except:
-                self._handle_connecterror(sys.exc_info()[0], false)
+                self._handle_connecterror(sys.exc_info()[0], False)
             c += 1
 
     def set_offset_temperature(self, temperature):
@@ -237,7 +237,7 @@ class CometBlueController:
                 self._read_state()
                 return
             except:
-                self._handle_connecterror(sys.exc_info()[0], false)
+                self._handle_connecterror(sys.exc_info()[0], False)
             c += 1
 
 
@@ -260,7 +260,7 @@ class CometBlueController:
                 self.device.set_target_temperature(temperature=target_temperatur)
             self._read_state()
         except:
-            self._handle_connecterror(sys.exc_info()[0], false)
+            self._handle_connecterror(sys.exc_info()[0], False)
         
     def get_state(self):
         with self.lock:
@@ -327,7 +327,7 @@ class CometblueWorker(BaseWorker):
             if 'storetarget' in data:
                 storetarget = data['storetarget']
             else:
-                storetarget = false
+                storetarget = False
             self.dev[name] = CometBlueController(data['mac'], data['pin'], updateinterval, storetarget)
             self.dev[name].start()
 
