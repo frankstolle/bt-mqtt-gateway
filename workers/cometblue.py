@@ -12,8 +12,8 @@ REQUIREMENTS = ['bluepy']
 
 _LOGGER = logging.getLogger('bt-mqtt-gw.cometblue')
 
-#maximum two parallel bluepy connections
-pool_cometblue = threading.Semaphore(value=2)
+# maximum two parallel bluepy connections. will be set in setup
+pool_cometblue = None
 
 class CometBlue():
     def __init__(self, mac, pin):
@@ -23,19 +23,25 @@ class CometBlue():
         self.lock = threading.RLock()
 
     def disconnect(self):
+        global pool_cometblue
         with self.lock:
             if self.connection == None:
                 return
-            _LOGGER.debug("disconnect from "+self.mac)
-            self.connection.disconnect()
-            pool_cometblue.release()
-            self.connection = None
+            try:
+                _LOGGER.debug("disconnect from "+self.mac)
+                self.connection.disconnect()
+            finally:
+                _LOGGER.debug("release free slot "+self.mac)
+                pool_cometblue.release()
+                self.connection = None
 
     def get_connection(self):
+        global pool_cometblue
         with self.lock:
             if self.connection == None:
-                _LOGGER.debug("wait for free slot"+self.mac)
+                _LOGGER.debug("wait for free slot "+self.mac)
                 pool_cometblue.acquire()
+                _LOGGER.debug("acquired slot "+self.mac)
                 _LOGGER.debug("connect to "+self.mac)
                 self.connection = Peripheral(self.mac, "public")
                 try:
@@ -212,7 +218,6 @@ class CometBlueController:
         print(e)
         self.device.disconnect()
 
-
     def set_target_temperature(self, temperature):
         temperature = max(8, min(28, temperature))
         target_temperatur = None
@@ -246,7 +251,6 @@ class CometBlueController:
                 self._handle_connecterror(sys.exc_info()[0], False)
             c += 1
 
-
     def set_mode(self, mode):
         target_temperatur = None
         with self.lock:
@@ -267,7 +271,7 @@ class CometBlueController:
             self._read_state()
         except:
             self._handle_connecterror(sys.exc_info()[0], False)
-        
+
     def get_state(self):
         with self.lock:
             return self.state.copy()
@@ -307,7 +311,6 @@ class CometblueCommand:
             _LOGGER.warn("unknown method %s", self.method)
             self.result = []
         _LOGGER.debug("finished command %s:%s", self.method, self.value)
-        
 
     def get_result(self):
         if not self.thread.is_alive():
@@ -317,10 +320,14 @@ class CometblueCommand:
             return None
         return self.result
 
-    
+
 class CometblueWorker(BaseWorker):
     def _setup(self):
+        global pool_cometblue
         self.dev = dict()
+        _LOGGER.debug("configure maximum of "+str(self.maxbluetooth) +
+                      " concurrent bluetooth connections")
+        pool_cometblue = threading.Semaphore(self.maxbluetooth)
         for name, data in self.devices.items():
             if not 'mac' in data:
                 raise Exception("mac missing for "+name)
@@ -348,7 +355,8 @@ class CometblueWorker(BaseWorker):
         ret = []
         state = self.dev[name].get_state()
         for key, value in state.items():
-            ret.append(MqttMessage(topic=self.format_topic(name, key), payload=value, retain=True))
+            ret.append(MqttMessage(topic=self.format_topic(
+                name, key), payload=value, retain=True))
         return ret
 
     def on_command(self, topic, value):
