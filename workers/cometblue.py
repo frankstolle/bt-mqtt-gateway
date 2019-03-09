@@ -43,7 +43,12 @@ class CometBlue():
                 pool_cometblue.acquire()
                 _LOGGER.debug("acquired slot "+self.mac)
                 _LOGGER.debug("connect to "+self.mac)
-                self.connection = Peripheral(self.mac, "public")
+                try:
+                    self.connection = Peripheral(self.mac, "public")
+                except:
+                    _LOGGER.debug("release free slot "+self
+                    pool_cometblue.release()
+                    raise
                 try:
                     _LOGGER.debug("send pin to "+self.mac)
                     self.connection.writeCharacteristic(0x0047, self.pin.to_bytes(4, byteorder='little'), withResponse=True)
