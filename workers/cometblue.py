@@ -12,6 +12,9 @@ REQUIREMENTS = ['bluepy']
 
 _LOGGER = logging.getLogger('bt-mqtt-gw.cometblue')
 
+#maximum two parallel bluepy connections
+pool_cometblue = threading.Semaphore(value=2)
+
 class CometBlue():
     def __init__(self, mac, pin):
         self.mac = mac
@@ -25,11 +28,14 @@ class CometBlue():
                 return
             _LOGGER.debug("disconnect from "+self.mac)
             self.connection.disconnect()
+            pool_cometblue.release()
             self.connection = None
 
     def get_connection(self):
         with self.lock:
             if self.connection == None:
+                _LOGGER.debug("wait for free slot"+self.mac)
+                pool_cometblue.acquire()
                 _LOGGER.debug("connect to "+self.mac)
                 self.connection = Peripheral(self.mac, "public")
                 try:
