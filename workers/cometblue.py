@@ -7,6 +7,7 @@ import threading
 import time
 import datetime
 import sys
+import traceback
 
 REQUIREMENTS = ['bluepy']
 
@@ -46,7 +47,7 @@ class CometBlue():
                 try:
                     self.connection = Peripheral(self.mac, "public")
                 except:
-                    _LOGGER.debug("release free slot "+self)
+                    _LOGGER.debug("release free slot "+self.mac)
                     pool_cometblue.release()
                     raise
                 try:
@@ -179,7 +180,7 @@ class CometBlueController:
                 failureCount = 0
             except:
                 failureCount += 1
-                self._handle_connecterror(sys.exc_info()[0], failureCount >= 6)
+                self._handle_connecterror(sys.exc_info(), failureCount >= 6)
                 self._correct_last_update_after_error()
 
     def _correct_last_update_after_error(self):
@@ -220,8 +221,10 @@ class CometBlueController:
                 self.lastupdated = time.time()
                 self.state['state'] = 'offline'
                 self.state['timestamp'] = datetime.datetime.fromtimestamp(time.time()).strftime("%Y-%m-%d %H:%M:%S")
-        print(e)
+        print(e[0])
+        #show backtrace traceback.print_exception(*e)
         self.device.disconnect()
+        del e
 
     def set_target_temperature(self, temperature):
         temperature = max(8, min(28, temperature))
@@ -241,7 +244,7 @@ class CometBlueController:
                 self._read_state()
                 return
             except:
-                self._handle_connecterror(sys.exc_info()[0], False)
+                self._handle_connecterror(sys.exc_info(), False)
             c += 1
 
     def set_offset_temperature(self, temperature):
@@ -253,7 +256,7 @@ class CometBlueController:
                 self._read_state()
                 return
             except:
-                self._handle_connecterror(sys.exc_info()[0], False)
+                self._handle_connecterror(sys.exc_info(), False)
             c += 1
 
     def set_mode(self, mode):
@@ -275,7 +278,7 @@ class CometBlueController:
                 self.device.set_target_temperature(temperature=target_temperatur)
             self._read_state()
         except:
-            self._handle_connecterror(sys.exc_info()[0], False)
+            self._handle_connecterror(sys.exc_info(), False)
 
     def get_state(self):
         with self.lock:
