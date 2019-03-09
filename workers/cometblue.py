@@ -46,7 +46,7 @@ class CometBlue():
                 try:
                     self.connection = Peripheral(self.mac, "public")
                 except:
-                    _LOGGER.debug("release free slot "+self
+                    _LOGGER.debug("release free slot "+self)
                     pool_cometblue.release()
                     raise
                 try:
