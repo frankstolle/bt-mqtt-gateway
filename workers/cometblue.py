@@ -325,8 +325,7 @@ class CometblueWorker(BaseWorker):
     def _setup(self):
         global pool_cometblue
         self.dev = dict()
-        _LOGGER.debug("configure maximum of "+str(self.maxbluetooth) +
-                      " concurrent bluetooth connections")
+        _LOGGER.debug("configure maximum of "+str(self.maxbluetooth) + " concurrent bluetooth connections")
         pool_cometblue = threading.Semaphore(self.maxbluetooth)
         for name, data in self.devices.items():
             if not 'mac' in data:
@@ -355,8 +354,7 @@ class CometblueWorker(BaseWorker):
         ret = []
         state = self.dev[name].get_state()
         for key, value in state.items():
-            ret.append(MqttMessage(topic=self.format_topic(
-                name, key), payload=value, retain=True))
+            ret.append(MqttMessage(topic=self.format_topic(name, key), payload=value, retain=True))
         return ret
 
     def on_command(self, topic, value):
