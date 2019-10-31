@@ -169,8 +169,8 @@ class CometBlueController:
         threading.Thread(target=self._update, daemon=True).start()
         
     def _update(self):
+        failureCount = 0
         while True:
-            failureCount = 0
             timetosleep = self._get_time_to_sleep_till_update()
             while timetosleep > 0:
                 time.sleep(timetosleep)
@@ -180,7 +180,9 @@ class CometBlueController:
                 failureCount = 0
             except:
                 failureCount += 1
-                self._handle_connecterror(sys.exc_info(), failureCount >= 6)
+                _LOGGER.debug("handle error for "+self.device.mac+" "+str(failureCount))
+                # 30 = 30*10 sekunden = 5 Minuten
+                self._handle_connecterror(sys.exc_info(), failureCount > 30)
                 self._correct_last_update_after_error()
 
     def _correct_last_update_after_error(self):
