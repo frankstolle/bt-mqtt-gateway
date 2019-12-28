@@ -98,7 +98,8 @@ class WorkersManager:
   @staticmethod
   def _pip_install_helper(package_names):
     for package in package_names:
-      pip_main(['install', '-q', package])
+      #pip_main(['install', '-q', package])
+      pass
 
   def _on_command_wrapper(self, worker_obj, client, userdata, c):
     _LOGGER.debug("on command wrapper for with %s: %s", c.topic, c.payload)

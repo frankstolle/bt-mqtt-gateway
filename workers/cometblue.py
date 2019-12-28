@@ -246,6 +246,24 @@ class CometBlueController:
                 self._handle_connecterror(sys.exc_info(), False)
             c += 1
 
+    def set_real_temperature(self, temperature):
+        if not "offset_temperature" in self.state:
+            return
+        if not "current_temperature" in self.state:
+            return
+        real_temp = round(temperature*2)/2
+        current_temp = self.state["current_temperature"]
+        current_offset = self.state["offset_temperature"]
+        if real_temp == current_temp:
+            _LOGGER.debug(f"skip update of offset temperature, because real temp is current temp: {real_temp}@{self.device.mac}")
+            return
+        new_offset = max(-5, min(5, real_temp - current_temp + current_offset))
+        if new_offset == current_offset:
+            _LOGGER.debug(f"skip update of offset temperature, because new offset is old offset: {new_offset} for {real_temp}@{self.device.mac}")
+            return
+        self.set_offset_temperature(new_offset)
+
+
     def set_mode(self, mode):
         target_temperatur = None
         with self.lock:
@@ -305,6 +323,8 @@ class CometblueCommand:
             self.device.clear_automatic()
         elif self.method == "offset_temperature":
             self.device.set_offset_temperature(float(self.value))
+        elif self.method == "real_temperature":
+            self.device.set_real_temperature(float(self.value))
         else:
             _LOGGER.warn("unknown method %s", self.method)
             self.result = []
