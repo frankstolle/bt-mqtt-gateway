@@ -121,38 +121,23 @@ class CometBlue():
     def clear_automatic(self):
         """ clears every automatic switch rule in thermostate """
         with self.lock:
-            connection = self.get_connection()
             _LOGGER.debug("clear rules "+self.mac)
-            #Monday
-            self.connection.writeCharacteristic(0x001f, bytes([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), withResponse=True)
-            #Thuesday
-            self.connection.writeCharacteristic(0x0021, bytes([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), withResponse=True)
-            #Wednesday
-            self.connection.writeCharacteristic(0x0023, bytes([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), withResponse=True)
-            #Thursday
-            self.connection.writeCharacteristic(0x0025, bytes([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), withResponse=True)
-            #Friday
-            self.connection.writeCharacteristic(0x0027, bytes([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), withResponse=True)
-            #Saturday
-            self.connection.writeCharacteristic(0x0029, bytes([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), withResponse=True)
-            #Sunday
-            self.connection.writeCharacteristic(0x002b, bytes([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), withResponse=True)
-            #holiday 1
-            self.connection.writeCharacteristic(0x002d, bytes([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80]), withResponse=True)
-            #holiday 2
-            self.connection.writeCharacteristic(0x002f, bytes([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80]), withResponse=True)
-            #holiday 3
-            self.connection.writeCharacteristic(0x0031, bytes([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80]), withResponse=True)
-            #holiday 4
-            self.connection.writeCharacteristic(0x0033, bytes([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80]), withResponse=True)
-            #holiday 5
-            self.connection.writeCharacteristic(0x0035, bytes([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80]), withResponse=True)
-            #holiday 6
-            self.connection.writeCharacteristic(0x0037, bytes([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80]), withResponse=True)
-            #holiday 7
-            self.connection.writeCharacteristic(0x0039, bytes([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80]), withResponse=True)
-            #holiday 8
-            self.connection.writeCharacteristic(0x003b, bytes([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80]), withResponse=True)
+            #monday to sunday
+            for id in range(0x001f, 0x002c, 2):
+                try:
+                    connection = self.get_connection()
+                    _LOGGER.debug(f"clear day {id} for {self.mac}")
+                    connection.writeCharacteristic(id, bytes([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), withResponse=True)
+                except:
+                    self.disconnect()
+            #holiday 1 till 7
+            for id in range(0x002d, 0x003c, 2):
+                try:
+                    connection = self.get_connection()
+                    _LOGGER.debug(f"clear holiday {id} for {self.mac}")
+                    connection.writeCharacteristic(id, bytes([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80]), withResponse=True)
+                except:
+                    self.disconnect()
 
 class CometBlueController:
     def __init__(self, mac, pin, updateinterval, storetarget):
@@ -291,8 +276,11 @@ class CometBlueController:
         self.device.disconnect()
 
     def clear_automatic(self):
-        self.device.clear_automatic()
-        self.device.disconnect()
+        try:
+            self.device.clear_automatic()
+            self.device.disconnect()
+        except:
+            self._handle_connecterror(sys.exc_info(), False)
 
 class CometblueCommand:
 
