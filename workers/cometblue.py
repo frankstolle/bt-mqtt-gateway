@@ -369,7 +369,7 @@ class CometblueWorker(BaseWorker):
         global pool_cometblue
         self.dev = dict()
         _LOGGER.debug("configure maximum of "+str(self.maxbluetooth) + " concurrent bluetooth connections")
-        if self.interfaces == None:
+        if not hasattr(self, "interfaces"):
             self.interfaces = [0]
         _LOGGER.debug(f"using interfaces {self.interfaces}")
         pool_cometblue = threading.Semaphore(self.maxbluetooth)
