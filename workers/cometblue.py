@@ -8,6 +8,8 @@ import time
 import datetime
 import sys
 import traceback
+import functools
+import random
 
 REQUIREMENTS = ['bluepy']
 
@@ -17,10 +19,13 @@ _LOGGER = logging.getLogger('bt-mqtt-gw.cometblue')
 pool_cometblue = None
 
 class CometBlue():
-    def __init__(self, mac, pin):
+    def __init__(self, mac, pin, interfaces):
         self.mac = mac
         self.pin = pin
         self.connection = None
+        self.interfaces = {}
+        for interface in interfaces:
+            self.interfaces[interface] = 0
         self.lock = threading.RLock()
 
     def disconnect(self):
@@ -40,23 +45,43 @@ class CometBlue():
         global pool_cometblue
         with self.lock:
             if self.connection == None:
+                interface = self._get_interface_to_connect()
                 _LOGGER.debug("wait for free slot "+self.mac)
                 pool_cometblue.acquire()
                 _LOGGER.debug("acquired slot "+self.mac)
-                _LOGGER.debug("connect to "+self.mac)
+                _LOGGER.debug(f"connect to {self.mac}@hci{interface}")
                 try:
-                    self.connection = Peripheral(self.mac, "public")
+                    self.connection = Peripheral(self.mac, "public", iface=interface)
                 except:
                     _LOGGER.debug("release free slot "+self.mac)
                     pool_cometblue.release()
+                    self._handle_connect_failure(interface)
                     raise
                 try:
                     _LOGGER.debug("send pin to "+self.mac)
                     self.connection.writeCharacteristic(0x0047, self.pin.to_bytes(4, byteorder='little'), withResponse=True)
                 except:
                     self.disconnect()
+                    self._handle_connect_failure(interface)
                     raise
+                self._handle_connect_success(interface)
             return self.connection
+    
+    def _handle_connect_failure(self, failed_interface):
+        if self.interfaces[failed_interface] > 0:
+            self.interfaces[failed_interface] = 0
+        self.interfaces[failed_interface] -= 1
+
+    def _handle_connect_success(self, success_interface):
+        for interface in self.interfaces:
+            if self.interfaces[interface] < 0:
+                self.interfaces[interface] = 0
+        self.interfaces[success_interface] += 1
+
+    def _get_interface_to_connect(self):
+        best_count = functools.reduce(lambda result, interface: max(result, self.interfaces[interface]), self.interfaces)
+        possible_interfaces = list(map(lambda key: key, filter(lambda key: self.interfaces[key]>=best_count-5, self.interfaces)))
+        return possible_interfaces[random.randint(0, len(possible_interfaces)-1)]
 
     def read_temperature(self):
         with self.lock:
@@ -140,12 +165,12 @@ class CometBlue():
                     self.disconnect()
 
 class CometBlueController:
-    def __init__(self, mac, pin, updateinterval, storetarget):
+    def __init__(self, mac, pin, updateinterval, storetarget, interfaces):
         self.lock = threading.RLock()
         self.updateinterval = updateinterval
         #storetarget = saves targetvalue in high target to handle off and heat mode correctly
         self.storetarget = storetarget
-        self.device = CometBlue(mac, pin)
+        self.device = CometBlue(mac, pin, interfaces)
         self.lastupdated = 0
         self.state = dict()
         self.state['state'] = 'offline'
@@ -344,6 +369,9 @@ class CometblueWorker(BaseWorker):
         global pool_cometblue
         self.dev = dict()
         _LOGGER.debug("configure maximum of "+str(self.maxbluetooth) + " concurrent bluetooth connections")
+        if self.interfaces == None:
+            self.interfaces = [0]
+        _LOGGER.debug(f"using interfaces {self.interfaces}")
         pool_cometblue = threading.Semaphore(self.maxbluetooth)
         for name, data in self.devices.items():
             if not 'mac' in data:
@@ -358,7 +386,7 @@ class CometblueWorker(BaseWorker):
                 storetarget = data['storetarget']
             else:
                 storetarget = False
-            self.dev[name] = CometBlueController(data['mac'], data['pin'], updateinterval, storetarget)
+            self.dev[name] = CometBlueController(data['mac'], data['pin'], updateinterval, storetarget, self.interfaces)
             self.dev[name].start()
 
     def status_update(self):
