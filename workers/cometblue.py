@@ -45,12 +45,13 @@ class CometBlue():
         global pool_cometblue
         with self.lock:
             if self.connection == None:
-                interface = self._get_interface_to_connect()
                 _LOGGER.debug("wait for free slot "+self.mac)
                 pool_cometblue.acquire()
-                _LOGGER.debug("acquired slot "+self.mac)
-                _LOGGER.debug(f"connect to {self.mac}@hci{interface}")
+                interface = None
                 try:
+                    _LOGGER.debug("acquired slot "+self.mac)
+                    interface = self._get_interface_to_connect()
+                    _LOGGER.debug(f"connect to {self.mac}@hci{interface}")
                     self.connection = Peripheral(self.mac, "public", iface=interface)
                 except:
                     _LOGGER.debug("release free slot "+self.mac)
@@ -79,7 +80,7 @@ class CometBlue():
         self.interfaces[success_interface] += 1
 
     def _get_interface_to_connect(self):
-        best_count = functools.reduce(lambda result, interface: max(result, self.interfaces[interface]), self.interfaces)
+        best_count = functools.reduce(lambda result, value: max(result, value), map(lambda key:self.interfaces[key], self.interfaces))
         possible_interfaces = list(map(lambda key: key, filter(lambda key: self.interfaces[key]>=best_count-5, self.interfaces)))
         return possible_interfaces[random.randint(0, len(possible_interfaces)-1)]
 
@@ -233,8 +234,12 @@ class CometBlueController:
                 self.lastupdated = time.time()
                 self.state['state'] = 'offline'
                 self.state['timestamp'] = datetime.datetime.fromtimestamp(time.time()).strftime("%Y-%m-%d %H:%M:%S")
-        print(e[0])
-        #show backtrace traceback.print_exception(*e)
+        error = e[0]
+        if isinstance(error, bluepy.btle.BTLEDisconnectError):
+            print("got error on connection: BTLEDisconnectError")
+        else:
+            print(f"got error on connection: {e[0]}")
+            traceback.print_exception(*e)
         self.device.disconnect()
         del e
 
