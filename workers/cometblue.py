@@ -174,7 +174,8 @@ class CometBlueController:
         self.device = CometBlue(mac, pin, interfaces)
         self.lastupdated = 0
         self.state = dict()
-        self.state['state'] = 'offline'
+        #no updates to mqtt until known (online or offline)
+        self.state['state'] = 'unknown'
 
     def start(self):
         threading.Thread(target=self._update, daemon=True).start()
@@ -404,8 +405,9 @@ class CometblueWorker(BaseWorker):
         """ gets mqtt state messages of an device state """
         ret = []
         state = self.dev[name].get_state()
-        for key, value in state.items():
-            ret.append(MqttMessage(topic=self.format_topic(name, key), payload=value, retain=True))
+        if state["state"] != "unknown":
+            for key, value in state.items():
+                ret.append(MqttMessage(topic=self.format_topic(name, key), payload=value, retain=True))
         return ret
 
     def on_command(self, topic, value):
