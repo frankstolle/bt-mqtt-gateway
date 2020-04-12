@@ -1,7 +1,7 @@
 from workers.base import BaseWorker
 from mqtt import MqttMessage
 from interruptingcow import timeout
-from bluepy.btle import Peripheral
+from bluepy.btle import Peripheral, BTLEDisconnectError
 import logging
 import threading
 import time
@@ -236,7 +236,7 @@ class CometBlueController:
                 self.state['state'] = 'offline'
                 self.state['timestamp'] = datetime.datetime.fromtimestamp(time.time()).strftime("%Y-%m-%d %H:%M:%S")
         error = e[0]
-        if isinstance(error, bluepy.btle.BTLEDisconnectError):
+        if isinstance(error, BTLEDisconnectError):
             print("got error on connection: BTLEDisconnectError")
         else:
             print(f"got error on connection: {e[0]}")
