@@ -37,10 +37,11 @@ class CometBlue():
                 _LOGGER.debug("disconnect from "+self.mac)
                 self.connection.disconnect()
             finally:
-                _LOGGER.debug("release free slot "+self.mac)
+                #zur Sicherheit wird noch 2 sekunden gewartet, bevor hier der nächste run losgetreten wird
+                time.sleep(2)
                 pool_cometblue.release()
+                _LOGGER.debug("releaseed free slot "+self.mac)
                 self.connection = None
-            #FIXME: Frank: hier ggf. eine Wartezeit einbauen, da sich der chip nicht erholt oder das programm ggf. bis zum neuen versuch noch was macht?
 
     def get_connection(self):
         global pool_cometblue
