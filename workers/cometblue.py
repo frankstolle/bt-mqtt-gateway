@@ -40,6 +40,7 @@ class CometBlue():
                 _LOGGER.debug("release free slot "+self.mac)
                 pool_cometblue.release()
                 self.connection = None
+            #FIXME: Frank: hier ggf. eine Wartezeit einbauen, da sich der chip nicht erholt oder das programm ggf. bis zum neuen versuch noch was macht?
 
     def get_connection(self):
         global pool_cometblue
@@ -62,9 +63,16 @@ class CometBlue():
                     _LOGGER.debug("send pin to "+self.mac)
                     self.connection.writeCharacteristic(0x0047, self.pin.to_bytes(4, byteorder='little'), withResponse=True)
                 except:
-                    self.disconnect()
-                    self._handle_connect_failure(interface)
-                    raise
+                    try:
+                        _LOGGER.debug("send default pin to "+self.mac)
+                        defaultpin = 0
+                        self.connection.writeCharacteristic(0x0047, defaultpin.to_bytes(4, byteorder='little'), withResponse=True)
+                        _LOGGER.debug("update pin for "+self.mac)
+                        self.connection.writeCharacteristic(0x0047, self.pin.to_bytes(4, byteorder='little'), withResponse=True)
+                    except:
+                        self.disconnect()
+                        self._handle_connect_failure(interface)
+                        raise
                 self._handle_connect_success(interface)
             return self.connection
     
@@ -236,10 +244,10 @@ class CometBlueController:
                 self.state['state'] = 'offline'
                 self.state['timestamp'] = datetime.datetime.fromtimestamp(time.time()).strftime("%Y-%m-%d %H:%M:%S")
         error = e[0]
-        if isinstance(error, BTLEDisconnectError):
-            print("got error on connection: BTLEDisconnectError")
+        if isinstance(e[0], BTLEDisconnectError):
+            _LOGGER.warn("got error on connection: BTLEDisconnectError")
         else:
-            print(f"got error on connection: {e[0]}")
+            _LOGGER.warn(f"got error on connection: {e[0]}")
             traceback.print_exception(*e)
         self.device.disconnect()
         del e
