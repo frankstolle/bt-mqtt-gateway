@@ -38,9 +38,10 @@ class CometBlue():
                 self.connection.disconnect()
             finally:
                 #zur Sicherheit wird noch 2 sekunden gewartet, bevor hier der nächste run losgetreten wird
-                time.sleep(2)
+                time.sleep(1)
                 pool_cometblue.release()
-                _LOGGER.debug("releaseed free slot "+self.mac)
+                time.sleep(1)
+                _LOGGER.debug("released free slot "+self.mac)
                 self.connection = None
 
     def get_connection(self):
@@ -56,8 +57,11 @@ class CometBlue():
                     _LOGGER.debug(f"connect to {self.mac}@hci{interface}")
                     self.connection = Peripheral(self.mac, "public", iface=interface)
                 except:
-                    _LOGGER.debug("release free slot "+self.mac)
+                    _LOGGER.debug("releaseing free slot "+self.mac)
+                    time.sleep(1)
                     pool_cometblue.release()
+                    time.sleep(1)
+                    _LOGGER.debug("released free slot "+self.mac)
                     self._handle_connect_failure(interface)
                     raise
                 try:
