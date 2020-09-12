@@ -346,7 +346,7 @@ class CometBlueController:
             _LOGGER.warn("got error on connection: BTLEDisconnectError")
         else:
             _LOGGER.warn(f"got unknown error on connection: {e[0]}")
-            traceback.print_exception(*e)
+            #traceback.print_exception(*e)
         self.device.disconnect()
         del e
 
