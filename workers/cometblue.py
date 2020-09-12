@@ -268,12 +268,8 @@ class CometBlueController:
                     "handle error for " + self.device.mac + " " + str(failureCount)
                 )
                 self._handle_connecterror(sys.exc_info())
-                self._correct_last_update_after_error()
-
-    def _correct_last_update_after_error(self):
-        """ correct last update to check again in 10 seconds """
-        with self.lock:
-            self.lastupdated = time.time() + 10 - self.updateinterval
+                #wait 30 seconds till any retry
+                time.sleep(30)
 
     def _get_time_to_sleep_till_update(self):
         with self.lock:
