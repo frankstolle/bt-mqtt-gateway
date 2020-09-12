@@ -39,9 +39,8 @@ class CometBlue:
                 self.connection.disconnect()
             finally:
                 # zur Sicherheit wird noch 2 sekunden gewartet, bevor hier der nächste run losgetreten wird
-                time.sleep(1)
+                time.sleep(2)
                 pool_cometblue.release()
-                time.sleep(1)
                 _LOGGER.debug("released free slot " + self.mac)
                 self.connection = None
 
@@ -58,10 +57,8 @@ class CometBlue:
                     _LOGGER.debug(f"connect to {self.mac}@hci{interface}")
                     self.connection = Peripheral(self.mac, "public", iface=interface)
                 except:
-                    _LOGGER.debug("releaseing free slot " + self.mac)
-                    time.sleep(1)
+                    time.sleep(2)
                     pool_cometblue.release()
-                    time.sleep(1)
                     _LOGGER.debug("released free slot " + self.mac)
                     self._handle_connect_failure(interface)
                     raise
@@ -348,7 +345,7 @@ class CometBlueController:
         if isinstance(e[0], BTLEDisconnectError):
             _LOGGER.warn("got error on connection: BTLEDisconnectError")
         else:
-            _LOGGER.warn(f"got error on connection: {e[0]}")
+            _LOGGER.warn(f"got unknown error on connection: {e[0]}")
             traceback.print_exception(*e)
         self.device.disconnect()
         del e
