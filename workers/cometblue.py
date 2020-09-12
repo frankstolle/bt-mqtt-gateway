@@ -332,6 +332,7 @@ class CometBlueController:
     def _handle_connecterror(self, e):
         if time.time() - self.lastsuccess > 7200:
             #last success is over 2 hours old
+            _LOGGER.warn(f"mark {self.device.mac} as offline")
             with self.lock:
                 self.state["state"] = "offline"
                 self.state["timestamp"] = datetime.datetime.fromtimestamp(
