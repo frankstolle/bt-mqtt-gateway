@@ -344,11 +344,11 @@ class CometBlueController:
                     time.time()
                 ).strftime("%Y-%m-%d %H:%M:%S")
         error = e[0]
-        if isinstance(e[0], BTLEDisconnectError):
+        if 'BTLEDisconnectError' in str(e[0]):
             _LOGGER.warn("got error on connection: BTLEDisconnectError")
         else:
             _LOGGER.warn(f"got unknown error on connection: {e[0]}")
-            #traceback.print_exception(*e)
+            traceback.print_exception(*e)
         self.device.disconnect()
         del e
 
@@ -440,6 +440,8 @@ class CometblueCommand:
 
     def is_runnable(self):
         if self.method == "real_temperature":
+            if self.value == "unknown":
+                return False
             temperature = float(self.value)
             if not "offset_temperature" in self.device.state:
                 return False
