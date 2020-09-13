@@ -377,8 +377,8 @@ class CometBlueController:
 
     def set_real_temperature(self, temperature):
         real_temp = round(temperature * 2) / 2
-        current_temp = self.device.state["current_temperature"]
-        current_offset = self.device.state["offset_temperature"]
+        current_temp = self.state["current_temperature"]
+        current_offset = self.state["offset_temperature"]
         new_offset = max(-5, min(5, real_temp - current_temp + current_offset))
         self.set_offset_temperature(new_offset)
 
