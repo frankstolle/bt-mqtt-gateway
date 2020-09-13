@@ -238,7 +238,7 @@ class CometBlueController:
         self.storetarget = storetarget
         self.device = CometBlue(mac, pin, interfaces)
         self.lastupdated = 0
-        self.lastsuccess = 0
+        self.lastsuccess = time.time()
         self.state = dict()
         # no updates to mqtt until known (online or offline)
         self.state["state"] = "unknown"
@@ -268,7 +268,7 @@ class CometBlueController:
                     "handle error for " + self.device.mac + " " + str(failureCount)
                 )
                 self._handle_connecterror(sys.exc_info())
-                #wait 30 seconds till any retry
+                # wait 30 seconds till any retry
                 time.sleep(30)
 
     def _get_time_to_sleep_till_update(self):
@@ -331,7 +331,7 @@ class CometBlueController:
 
     def _handle_connecterror(self, e):
         if time.time() - self.lastsuccess > 7200:
-            #last success is over 2 hours old
+            # last success is over 2 hours old
             _LOGGER.warn(f"mark {self.device.mac} as offline")
             with self.lock:
                 self.state["state"] = "offline"
@@ -343,7 +343,7 @@ class CometBlueController:
             _LOGGER.warn("got error on connection: BTLEDisconnectError")
         else:
             _LOGGER.warn(f"got unknown error on connection: {e[0]}")
-            #traceback.print_exception(*e)
+            # traceback.print_exception(*e)
         self.device.disconnect()
         del e
 
@@ -369,24 +369,10 @@ class CometBlueController:
         self.device.set_offset_temperature(temperature)
 
     def set_real_temperature(self, temperature):
-        if not "offset_temperature" in self.state:
-            return
-        if not "current_temperature" in self.state:
-            return
         real_temp = round(temperature * 2) / 2
-        current_temp = self.state["current_temperature"]
-        current_offset = self.state["offset_temperature"]
-        if real_temp == current_temp:
-            _LOGGER.debug(
-                f"skip update of offset temperature, because real temp is current temp: {real_temp}@{self.device.mac}"
-            )
-            return
+        current_temp = self.device.state["current_temperature"]
+        current_offset = self.device.state["offset_temperature"]
         new_offset = max(-5, min(5, real_temp - current_temp + current_offset))
-        if new_offset == current_offset:
-            _LOGGER.debug(
-                f"skip update of offset temperature, because new offset is old offset: {new_offset} for {real_temp}@{self.device.mac}"
-            )
-            return
         self.set_offset_temperature(new_offset)
 
     def set_mode(self, mode):
@@ -419,9 +405,17 @@ class CometBlueController:
 
     def add_command(self, command):
         with self.lock:
-            self.pending_commands = list(filter(lambda c:c.method != command.method, self.pending_commands))
+            self.pending_commands = list(
+                filter(lambda c: c.method != command.method, self.pending_commands)
+            )
             self.pending_commands.append(command)
             self.condition.notify()
+
+    def remove_similar_commands(self, command):
+        with self.lock:
+            self.pending_commands = list(
+                filter(lambda c: c.method != command.method, self.pending_commands)
+            )
 
 
 class CometblueCommand:
@@ -433,7 +427,39 @@ class CometblueCommand:
         self._result = None
         self._lock = threading.RLock()
         self._resultcondition = threading.Condition(lock=self._lock)
-        self.device.add_command(self)
+        if self.is_runnable():
+            self.device.add_command(self)
+        else:
+            # aktueller stand ist zielzustand, daher andere commands entfernen, die dies ggf. ändern würden
+            self.device.remove_similar_commands(self)
+
+    def is_runnable(self):
+        if self.method == "real_temperature":
+            temperature = float(self.value)
+            if not "offset_temperature" in self.device.state:
+                return False
+            if not "current_temperature" in self.device.state:
+                return False
+            real_temp = round(temperature * 2) / 2
+            current_temp = self.device.state["current_temperature"]
+            current_offset = self.device.state["offset_temperature"]
+            if real_temp == current_temp:
+                _LOGGER.debug(
+                    f"skip update of offset temperature, because real temp is current temp: {real_temp}@{self.device.mac}"
+                )
+                return False
+            new_offset = max(-5, min(5, real_temp - current_temp + current_offset))
+            if new_offset == current_offset:
+                _LOGGER.debug(
+                    f"skip update of offset temperature, because new offset is old offset: {new_offset} for {real_temp}@{self.device.mac}"
+                )
+                return False
+            return True
+        if self.method == "mode":
+            if self.value.lower() == self.device.state["mode"].lower():
+                return False
+            return True
+        return True
 
     def perform(self):
         _LOGGER.debug("start command %s:%s", self.method, self.value)
