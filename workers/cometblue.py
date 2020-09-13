@@ -304,11 +304,13 @@ class CometBlueController:
                     else temperature["target_temperature"]
                 )
             else:
-                self.state["mode"] = (
-                    "AUTO"
-                    if temperature["target_high"] == temperature["target_temperature"]
-                    else "MANUAL"
-                )
+                self.state["mode"] = "AUTO"
+                # (
+                #    "AUTO"
+                #    if temperature["target_high"] == temperature["target_temperature"]
+                #    else
+                #    "MANUAL"
+                # )
                 self.state["target_temperature"] = temperature["target_temperature"]
             self.state["battery"] = battery
             self.state["timestamp"] = datetime.datetime.fromtimestamp(
@@ -344,7 +346,7 @@ class CometBlueController:
                     time.time()
                 ).strftime("%Y-%m-%d %H:%M:%S")
         error = e[0]
-        if 'BTLEDisconnectError' in str(e[0]):
+        if "BTLEDisconnectError" in str(e[0]):
             _LOGGER.warn("got error on connection: BTLEDisconnectError")
         else:
             _LOGGER.warn(f"got unknown error on connection: {e[0]}")
