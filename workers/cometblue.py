@@ -10,6 +10,7 @@ import sys
 import traceback
 import functools
 import random
+import typing
 
 REQUIREMENTS = ["bluepy"]
 
@@ -276,8 +277,9 @@ class CometBlueController:
             return self.lastupdated + self.updateinterval - time.time()
 
     def _read_state(self):
+        deleted_commands = list()
         try:
-            self._perform_commands()
+            self._perform_commands(deleted_commands)
             temperature = self.device.read_temperature()
             battery = self.device.read_battery()
         finally:
@@ -312,8 +314,10 @@ class CometBlueController:
             self.state["timestamp"] = datetime.datetime.fromtimestamp(
                 self.lastupdated
             ).strftime("%Y-%m-%d %H:%M:%S")
+        for command in deleted_commands:
+            command.mark_command_finished()
 
-    def _perform_commands(self):
+    def _perform_commands(self, deleted_commands):
         while True:
             command = None
             try:
@@ -328,6 +332,7 @@ class CometBlueController:
                 if success:
                     with self.lock:
                         self.pending_commands.remove(command)
+                        deleted_commands.append(command)
 
     def _handle_connecterror(self, e):
         if time.time() - self.lastsuccess > 7200:
@@ -343,7 +348,7 @@ class CometBlueController:
             _LOGGER.warn("got error on connection: BTLEDisconnectError")
         else:
             _LOGGER.warn(f"got unknown error on connection: {e[0]}")
-            # traceback.print_exception(*e)
+            #traceback.print_exception(*e)
         self.device.disconnect()
         del e
 
@@ -445,13 +450,13 @@ class CometblueCommand:
             current_offset = self.device.state["offset_temperature"]
             if real_temp == current_temp:
                 _LOGGER.debug(
-                    f"skip update of offset temperature, because real temp is current temp: {real_temp}@{self.device.mac}"
+                    f"skip update of offset temperature, because real temp is current temp: {real_temp}@{self.device.device.mac}"
                 )
                 return False
             new_offset = max(-5, min(5, real_temp - current_temp + current_offset))
             if new_offset == current_offset:
                 _LOGGER.debug(
-                    f"skip update of offset temperature, because new offset is old offset: {new_offset} for {real_temp}@{self.device.mac}"
+                    f"skip update of offset temperature, because new offset is old offset: {new_offset} for {real_temp}@{self.device.device.mac}"
                 )
                 return False
             return True
@@ -478,10 +483,12 @@ class CometblueCommand:
             self.device.set_real_temperature(float(self.value))
         else:
             _LOGGER.warn("unknown method %s", self.method)
+        _LOGGER.debug("finished command %s:%s", self.method, self.value)
+
+    def mark_command_finished(self):
         with self._lock:
             self._result = []
             self._resultcondition.notify()
-        _LOGGER.debug("finished command %s:%s", self.method, self.value)
 
     def get_result(self):
         with self._lock:
