@@ -51,18 +51,23 @@ class CometBlue:
             if self.connection == None:
                 _LOGGER.debug("wait for free slot " + self.mac)
                 pool_cometblue.acquire()
+                _LOGGER.debug("acquired slot " + self.mac)
                 interface = None
-                try:
-                    _LOGGER.debug("acquired slot " + self.mac)
-                    interface = self._get_interface_to_connect()
-                    _LOGGER.debug(f"connect to {self.mac}@hci{interface}")
-                    self.connection = Peripheral(self.mac, "public", iface=interface)
-                except:
-                    time.sleep(2)
-                    pool_cometblue.release()
-                    _LOGGER.debug("released free slot " + self.mac)
-                    self._handle_connect_failure(interface)
-                    raise
+                maxTries = 5
+                while maxTries > 0:
+                    try:
+                        interface = self._get_interface_to_connect()
+                        _LOGGER.debug(f"connect to {self.mac}@hci{interface} Retries allowed: {maxTries}")
+                        self.connection = Peripheral(self.mac, "public", iface=interface)
+                        break
+                    except:
+                        time.sleep(2)
+                        maxTries -= 1
+                        if maxTries == 0:
+                            pool_cometblue.release()
+                            _LOGGER.debug("released free slot " + self.mac)
+                            self._handle_connect_failure(interface)
+                            raise
                 try:
                     _LOGGER.debug("send pin to " + self.mac)
                     self.connection.writeCharacteristic(
@@ -279,9 +284,9 @@ class CometBlueController:
     def _read_state(self):
         deleted_commands = list()
         try:
+            battery = self.device.read_battery()
             self._perform_commands(deleted_commands)
             temperature = self.device.read_temperature()
-            battery = self.device.read_battery()
         finally:
             self.device.disconnect()
         with self.lock:
